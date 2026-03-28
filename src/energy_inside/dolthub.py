@@ -52,13 +52,20 @@ class DoltHubClient:
         deadline = time.monotonic() + POLL_TIMEOUT
 
         while time.monotonic() < deadline:
-            resp = requests.get(
-                url,
-                headers=self._headers(),
-                params={"operationName": operation_name},
-                timeout=HTTP_TIMEOUT,
-            )
-            resp.raise_for_status()
+            try:
+                resp = requests.get(
+                    url,
+                    headers=self._headers(),
+                    params={"operationName": operation_name},
+                    timeout=HTTP_TIMEOUT,
+                )
+                resp.raise_for_status()
+            except requests.RequestException as e:
+                logger.warning(
+                    "Poll request failed (write may have succeeded): %s", e
+                )
+                return {"done": True, "poll_failed": True}
+
             body = resp.json()
 
             if body.get("done"):
@@ -74,6 +81,8 @@ class DoltHubClient:
 
             time.sleep(POLL_INTERVAL)
 
-        raise DoltHubError(
-            f"Operation {operation_name} timed out after {POLL_TIMEOUT}s"
+        logger.warning(
+            "Poll timed out for %s (write may have succeeded)",
+            operation_name,
         )
+        return {"done": True, "poll_timed_out": True}
