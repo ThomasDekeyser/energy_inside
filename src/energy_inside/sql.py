@@ -41,33 +41,3 @@ def build_insert(reading: dict) -> str:
     columns_str = ", ".join(cols)
     values_str = ", ".join(vals)
     return f"REPLACE INTO readings ({columns_str}) VALUES ({values_str})"
-
-
-def build_create_table() -> str:
-    """Build the CREATE TABLE IF NOT EXISTS statement for the readings table."""
-    return """CREATE TABLE IF NOT EXISTS readings (
-    timestamp DATETIME PRIMARY KEY,
-    active_tariff INT,
-    total_power_import_kwh DECIMAL(10,3),
-    total_power_import_t1_kwh DECIMAL(10,3),
-    total_power_import_t2_kwh DECIMAL(10,3),
-    total_power_export_kwh DECIMAL(10,3),
-    total_power_export_t1_kwh DECIMAL(10,3),
-    total_power_export_t2_kwh DECIMAL(10,3),
-    active_power_w DECIMAL(10,3),
-    active_power_l1_w DECIMAL(10,3),
-    active_power_l2_w DECIMAL(10,3),
-    active_power_l3_w DECIMAL(10,3),
-    active_voltage_l1_v DECIMAL(10,3),
-    active_voltage_l2_v DECIMAL(10,3),
-    active_voltage_l3_v DECIMAL(10,3),
-    active_current_a DECIMAL(10,3),
-    active_current_l1_a DECIMAL(10,3),
-    active_current_l2_a DECIMAL(10,3),
-    active_current_l3_a DECIMAL(10,3),
-    active_power_average_w DECIMAL(10,3),
-    monthly_power_peak_w DECIMAL(10,3),
-    monthly_power_peak_timestamp DATETIME,
-    total_gas_m3 DECIMAL(10,3),
-    gas_timestamp DATETIME
-)"""

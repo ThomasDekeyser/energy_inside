@@ -1,4 +1,4 @@
-from energy_inside.sql import build_insert, build_create_table
+from energy_inside.sql import build_insert
 
 
 def test_build_insert():
@@ -28,11 +28,3 @@ def test_build_insert_escapes_strings():
     sql = build_insert(reading)
     assert "REPLACE INTO readings" in sql
     assert "'2026-03-28 10:45:00'" in sql
-
-
-def test_build_create_table():
-    sql = build_create_table()
-    assert "CREATE TABLE IF NOT EXISTS readings" in sql
-    assert "timestamp DATETIME PRIMARY KEY" in sql
-    assert "total_power_import_kwh DECIMAL(10,3)" in sql
-    assert "gas_timestamp DATETIME" in sql

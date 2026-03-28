@@ -41,11 +41,13 @@ Single `readings` table on the `main` branch of `thomasdekeyser/energy_inside`.
 | `active_current_l3_a`         | `DECIMAL(10,3)` | `active_current_l3_a`          |
 | `active_power_average_w`      | `DECIMAL(10,3)` | `active_power_average_w`       |
 | `monthly_power_peak_w`        | `DECIMAL(10,3)` | `montly_power_peak_w`          |
-| `monthly_power_peak_timestamp`| `VARCHAR(20)`   | `montly_power_peak_timestamp`  |
+| `monthly_power_peak_timestamp`| `DATETIME`      | `montly_power_peak_timestamp`  |
 | `total_gas_m3`                | `DECIMAL(10,3)` | `total_gas_m3`                 |
-| `gas_timestamp`               | `VARCHAR(20)`   | `gas_timestamp`                |
+| `gas_timestamp`               | `DATETIME`      | `gas_timestamp`                |
 
-Note: The source API has a typo (`montly_power_peak_w`). The column name is corrected to `monthly_power_peak_w`.
+Notes:
+- The source API has a typo (`montly_power_peak_w`). The column name is corrected to `monthly_power_peak_w`.
+- `montly_power_peak_timestamp` and `gas_timestamp` are returned as `YYMMDDHHmmss` integers (e.g., `260326193000` = 2026-03-26 19:30:00). The script parses these into `DATETIME` values before inserting.
 
 ## DoltHub Write API Flow
 
@@ -67,9 +69,9 @@ The DoltHub write API is asynchronous:
 6. Poll the operation endpoint until complete
 7. Log success or failure to stdout (captured by cron/syslog)
 
-## Setup Script (`setup.py`)
+## Table Setup
 
-One-time script that creates the `readings` table via the DoltHub write API using a `CREATE TABLE IF NOT EXISTS` statement.
+The `readings` table must be created manually via the DoltHub web SQL console before first use, as the DoltHub write API requires an existing commit history.
 
 ## Configuration
 
@@ -81,17 +83,19 @@ One-time script that creates the `readings` table via the DoltHub write API usin
 ## Dependencies
 
 - Python 3 (available on Raspberry Pi OS)
+- `uv` — Python package manager (handles venv creation and dependency resolution)
 - `requests` library
 
 No `dolt` CLI installation required.
 
 ## Deployment
 
-1. Clone the project repo to the RPi
-2. Install dependencies: `pip install -r requirements.txt`
-3. Set `DOLTHUB_TOKEN` environment variable
-4. Run `python3 setup.py` to create the table
-5. Add cron entry: `*/5 * * * * DOLTHUB_TOKEN=<token> /usr/bin/python3 /home/pi/energy_inside/collect.py >> /home/pi/energy_inside/collect.log 2>&1`
+1. Create the `readings` table via the DoltHub web SQL console
+2. Install `uv`: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+3. Clone the project repo to the RPi
+4. Install dependencies: `uv sync`
+5. Set `DOLTHUB_TOKEN` environment variable
+6. Add cron entry: `*/5 * * * * DOLTHUB_TOKEN=<token> cd /home/pi/energy_inside && uv run python collect.py >> /home/pi/energy_inside/collect.log 2>&1`
 
 ## Error Handling
 
@@ -104,8 +108,7 @@ No `dolt` CLI installation required.
 ```
 energy_inside/
 ├── collect.py          # Main polling script
-├── setup.py            # One-time table creation
-├── requirements.txt    # requests
+├── pyproject.toml      # Project metadata and dependencies (uv)
 └── README.md           # Setup instructions for RPi
 ```
 
