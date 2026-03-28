@@ -1,4 +1,3 @@
-import json
 from unittest.mock import patch, Mock
 from energy_inside.dolthub import DoltHubClient
 

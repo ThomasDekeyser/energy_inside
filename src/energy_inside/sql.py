@@ -29,7 +29,8 @@ COLUMNS = [
 def _format_value(value) -> str:
     """Format a value for SQL insertion."""
     if isinstance(value, str):
-        return f"'{value}'"
+        escaped = value.replace("'", "''")
+        return f"'{escaped}'"
     return str(value)
 
 

@@ -6,6 +6,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://www.dolthub.com/api/v1alpha1"
+HTTP_TIMEOUT = 30
 POLL_INTERVAL = 1
 POLL_TIMEOUT = 30
 
@@ -31,7 +32,8 @@ class DoltHubClient:
         """
         url = f"{BASE_URL}/{self.owner}/{self.repo}/write/main/main"
         resp = requests.post(
-            url, headers=self._headers(), json={"query": query}
+            url, headers=self._headers(), json={"query": query},
+            timeout=HTTP_TIMEOUT,
         )
         resp.raise_for_status()
         body = resp.json()
@@ -54,6 +56,7 @@ class DoltHubClient:
                 url,
                 headers=self._headers(),
                 params={"operationName": operation_name},
+                timeout=HTTP_TIMEOUT,
             )
             resp.raise_for_status()
             body = resp.json()

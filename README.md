@@ -34,7 +34,7 @@ export DOLTHUB_TOKEN=your_token_here
 4. Create the database table (one-time):
 
 ```bash
-uv run python setup.py
+uv run python create_table.py
 ```
 
 5. Test a single collection:
