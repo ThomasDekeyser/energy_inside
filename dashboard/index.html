@@ -20,11 +20,9 @@
     .stat .value { font-size: 20px; font-weight: bold; margin-top: 4px; }
     .stat.peak { background: #e3f2fd; }
     .stat.peak .value { color: #f44336; }
-    .stat.avg { background: #e8f5e9; }
-    .stat.avg .value { color: #4caf50; }
     .stat.min { background: #fff3e0; }
     .stat.min .value { color: #ff9800; }
-    #chart { width: 100%; height: calc(100vh - 200px); min-height: 400px; border: 1px solid #e0e0e0; border-radius: 8px; background: #fff; }
+    #chart { width: 100%; height: calc(20vh - 200px); min-height: 400px; border: 1px solid #e0e0e0; border-radius: 8px; background: #fff; }
     .message { text-align: center; padding: 80px 20px; color: #999; font-size: 16px; }
     .error { color: #f44336; }
   </style>
@@ -45,10 +43,6 @@
     <div class="stat peak">
       <div class="label">Peak</div>
       <div class="value" id="peak-value">—</div>
-    </div>
-    <div class="stat avg">
-      <div class="label">Average</div>
-      <div class="value" id="avg-value">—</div>
     </div>
     <div class="stat min">
       <div class="label">Min</div>
@@ -95,7 +89,6 @@
       return {
         current: values[values.length - 1],
         peak: Math.max(...values),
-        avg: values.reduce((a, b) => a + b, 0) / values.length,
         min: Math.min(...values),
       };
     }
@@ -144,7 +137,6 @@
     function renderStats(stats) {
       document.getElementById("current-value").textContent = `${Math.round(stats.current)} W`;
       document.getElementById("peak-value").textContent = `${Math.round(stats.peak)} W`;
-      document.getElementById("avg-value").textContent = `${Math.round(stats.avg)} W`;
       document.getElementById("min-value").textContent = `${Math.round(stats.min)} W`;
     }
 
