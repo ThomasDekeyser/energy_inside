@@ -22,6 +22,10 @@
     .stat.peak .value { color: #f44336; }
     .stat.min { background: #fff3e0; }
     .stat.min .value { color: #ff9800; }
+    .stat.import { background: #f3e5f5; }
+    .stat.import .value { color: #9c27b0; }
+    .stat.export { background: #e8f5e9; }
+    .stat.export .value { color: #4caf50; }
     #chart { width: 100%; height: calc(20vh - 200px); min-height: 400px; border: 1px solid #e0e0e0; border-radius: 8px; background: #fff; }
     .message { text-align: center; padding: 80px 20px; color: #999; font-size: 16px; }
     .error { color: #f44336; }
@@ -47,6 +51,14 @@
     <div class="stat min">
       <div class="label">Min</div>
       <div class="value" id="min-value">—</div>
+    </div>
+    <div class="stat import">
+      <div class="label">Import Today</div>
+      <div class="value" id="import-value">—</div>
+    </div>
+    <div class="stat export">
+      <div class="label">Export Today</div>
+      <div class="value" id="export-value">—</div>
     </div>
   </div>
 
@@ -79,7 +91,7 @@
 
     async function fetchReadings() {
       const midnightUTC = todayMidnightUTC();
-      const sql = `SELECT timestamp, active_power_w FROM readings WHERE timestamp >= '${midnightUTC}' ORDER BY timestamp`;
+      const sql = `SELECT timestamp, active_power_w, total_power_import_kwh, total_power_export_kwh FROM readings WHERE timestamp >= '${midnightUTC}' ORDER BY timestamp`;
       const url = `${API_BASE}/${OWNER}/${REPO}/main?q=${encodeURIComponent(sql)}`;
 
       const resp = await fetch(url);
@@ -95,10 +107,16 @@
 
     function computeStats(rows) {
       const values = rows.map(r => parseFloat(r.active_power_w));
+      const firstImport = parseFloat(rows[0].total_power_import_kwh);
+      const lastImport = parseFloat(rows[rows.length - 1].total_power_import_kwh);
+      const firstExport = parseFloat(rows[0].total_power_export_kwh);
+      const lastExport = parseFloat(rows[rows.length - 1].total_power_export_kwh);
       return {
         current: values[values.length - 1],
         peak: Math.max(...values),
         min: Math.min(...values),
+        importKwh: lastImport - firstImport,
+        exportKwh: lastExport - firstExport,
       };
     }
 
@@ -147,6 +165,8 @@
       document.getElementById("current-value").textContent = `${Math.round(stats.current)} W`;
       document.getElementById("peak-value").textContent = `${Math.round(stats.peak)} W`;
       document.getElementById("min-value").textContent = `${Math.round(stats.min)} W`;
+      document.getElementById("import-value").textContent = `${stats.importKwh.toFixed(2)} kWh`;
+      document.getElementById("export-value").textContent = `${stats.exportKwh.toFixed(2)} kWh`;
     }
 
     function showMessage(text, isError) {
