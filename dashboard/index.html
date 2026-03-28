@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Energy Inside</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fafafa; color: #333; padding: 24px; max-width: 960px; margin: 0 auto; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .header h1 { font-size: 20px; color: #333; }
+    .header .date { font-size: 13px; color: #999; }
+    .header .current { text-align: right; }
+    .header .current .label { font-size: 11px; color: #888; }
+    .header .current .value { font-size: 26px; font-weight: bold; color: #2196f3; }
+    .stats { display: flex; gap: 16px; margin-bottom: 20px; }
+    .stat { flex: 1; border-radius: 8px; padding: 12px 16px; text-align: center; }
+    .stat .label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat .value { font-size: 20px; font-weight: bold; margin-top: 4px; }
+    .stat.peak { background: #e3f2fd; }
+    .stat.peak .value { color: #f44336; }
+    .stat.avg { background: #e8f5e9; }
+    .stat.avg .value { color: #4caf50; }
+    .stat.min { background: #fff3e0; }
+    .stat.min .value { color: #ff9800; }
+    #chart { width: 100%; border: 1px solid #e0e0e0; border-radius: 8px; background: #fff; }
+    .message { text-align: center; padding: 80px 20px; color: #999; font-size: 16px; }
+    .error { color: #f44336; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>Energy Inside</h1>
+      <div class="date" id="date"></div>
+    </div>
+    <div class="current">
+      <div class="label">Current</div>
+      <div class="value" id="current-value">— W</div>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat peak">
+      <div class="label">Peak</div>
+      <div class="value" id="peak-value">—</div>
+    </div>
+    <div class="stat avg">
+      <div class="label">Average</div>
+      <div class="value" id="avg-value">—</div>
+    </div>
+    <div class="stat min">
+      <div class="label">Min</div>
+      <div class="value" id="min-value">—</div>
+    </div>
+  </div>
+
+  <div id="chart"></div>
+
+  <script>
+    const OWNER = "thomasdekeyser";
+    const REPO = "energy_inside";
+    const API_BASE = "https://www.dolthub.com/api/v1alpha1";
+
+    function formatDate(date) {
+      return date.toLocaleDateString("en-GB", {
+        weekday: "long", year: "numeric", month: "long", day: "numeric"
+      });
+    }
+
+    function todayUTC() {
+      const now = new Date();
+      return now.toISOString().slice(0, 10);
+    }
+
+    async function fetchReadings() {
+      const today = todayUTC();
+      const sql = `SELECT timestamp, active_power_w FROM readings WHERE timestamp >= '${today} 00:00:00' ORDER BY timestamp`;
+      const url = `${API_BASE}/${OWNER}/${REPO}/main?q=${encodeURIComponent(sql)}`;
+
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`API returned ${resp.status}`);
+
+      const data = await resp.json();
+      if (data.query_execution_status !== "Success") {
+        throw new Error(data.query_execution_message || "Query failed");
+      }
+
+      return data.rows || [];
+    }
+
+    function computeStats(rows) {
+      const values = rows.map(r => parseFloat(r.active_power_w));
+      return {
+        current: values[values.length - 1],
+        peak: Math.max(...values),
+        avg: values.reduce((a, b) => a + b, 0) / values.length,
+        min: Math.min(...values),
+      };
+    }
+
+    function renderChart(rows) {
+      const timestamps = rows.map(r => r.timestamp);
+      const values = rows.map(r => parseFloat(r.active_power_w));
+
+      const trace = {
+        x: timestamps,
+        y: values,
+        type: "scatter",
+        mode: "lines",
+        line: { color: "#2196f3", width: 2 },
+        fill: "tozeroy",
+        fillcolor: "rgba(33, 150, 243, 0.08)",
+        hovertemplate: "%{y:.0f} W<br>%{x}<extra></extra>",
+      };
+
+      const layout = {
+        margin: { t: 16, r: 24, b: 40, l: 56 },
+        xaxis: {
+          type: "date",
+          tickformat: "%H:%M",
+          gridcolor: "#f0f0f0",
+        },
+        yaxis: {
+          title: { text: "Watts", standoff: 8 },
+          gridcolor: "#f0f0f0",
+        },
+        plot_bgcolor: "#fff",
+        paper_bgcolor: "#fff",
+        font: { family: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", size: 12 },
+        hoverlabel: { bgcolor: "#333", font: { color: "#fff" } },
+      };
+
+      const config = {
+        responsive: true,
+        displayModeBar: true,
+        modeBarButtonsToRemove: ["lasso2d", "select2d", "autoScale2d"],
+      };
+
+      Plotly.newPlot("chart", [trace], layout, config);
+    }
+
+    function renderStats(stats) {
+      document.getElementById("current-value").textContent = `${Math.round(stats.current)} W`;
+      document.getElementById("peak-value").textContent = `${Math.round(stats.peak)} W`;
+      document.getElementById("avg-value").textContent = `${Math.round(stats.avg)} W`;
+      document.getElementById("min-value").textContent = `${Math.round(stats.min)} W`;
+    }
+
+    function showMessage(text, isError) {
+      const el = document.getElementById("chart");
+      el.innerHTML = `<div class="message ${isError ? "error" : ""}">${text}</div>`;
+    }
+
+    async function init() {
+      document.getElementById("date").textContent = `Active Power \u2014 ${formatDate(new Date())}`;
+
+      try {
+        const rows = await fetchReadings();
+
+        if (rows.length === 0) {
+          showMessage("No readings available for today");
+          return;
+        }
+
+        renderStats(computeStats(rows));
+        renderChart(rows);
+      } catch (err) {
+        console.error(err);
+        showMessage(`Failed to load data from DoltHub: ${err.message}`, true);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
