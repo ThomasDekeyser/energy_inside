@@ -37,6 +37,7 @@ class DoltHubClient:
         )
         resp.raise_for_status()
         body = resp.json()
+        #logger.info(body)
 
         if body.get("query_execution_status") != "Success":
             raise DoltHubError(
