@@ -56,15 +56,17 @@ cd ~/energy_inside
 uv sync
 ```
 
-4. Set your DoltHub token:
+4. Store your DoltHub token in a secure file:
 
 ```bash
-export DOLTHUB_TOKEN=your_token_here
+echo 'DOLTHUB_TOKEN=your_token_here' > ~/.dolthub_token
+chmod 600 ~/.dolthub_token
 ```
 
 5. Test a single collection:
 
 ```bash
+. ~/.dolthub_token
 uv run python collect.py
 ```
 
@@ -77,7 +79,7 @@ crontab -e
 Add this line:
 
 ```
-*/5 * * * * DOLTHUB_TOKEN=your_token_here cd /home/pi/energy_inside && /home/pi/.local/bin/uv run python collect.py >> /home/pi/energy_inside/collect.log 2>&1
+*/5 * * * * . /home/thomas/.dolthub_token && cd /home/thomas/energy_inside && /home/thomas/.local/bin/uv run python collect.py >> collect.log 2>&1
 ```
 
 ## Configuration
