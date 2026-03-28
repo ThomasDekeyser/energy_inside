@@ -59,7 +59,7 @@ uv sync
 4. Store your DoltHub token in a secure file:
 
 ```bash
-echo 'DOLTHUB_TOKEN=your_token_here' > ~/.dolthub_token
+echo 'export DOLTHUB_TOKEN=your_token_here' > ~/.dolthub_token
 chmod 600 ~/.dolthub_token
 ```
 
