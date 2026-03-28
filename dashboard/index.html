@@ -63,14 +63,23 @@
       });
     }
 
-    function todayUTC() {
+    function todayMidnightUTC() {
+      // Get current date in CET/CEST, then convert its midnight back to UTC
       const now = new Date();
-      return now.toISOString().slice(0, 10);
+      const cetDate = now.toLocaleDateString("sv-SE", { timeZone: "Europe/Brussels" });
+      // cetDate is "YYYY-MM-DD" — midnight CET in UTC
+      return new Date(cetDate + "T00:00:00+01:00").toISOString().slice(0, 19).replace("T", " ");
+    }
+
+    function utcToCET(utcString) {
+      // Parse as UTC, format as CET
+      const dt = new Date(utcString + "Z");
+      return dt.toLocaleString("sv-SE", { timeZone: "Europe/Brussels" });
     }
 
     async function fetchReadings() {
-      const today = todayUTC();
-      const sql = `SELECT timestamp, active_power_w FROM readings WHERE timestamp >= '${today} 00:00:00' ORDER BY timestamp`;
+      const midnightUTC = todayMidnightUTC();
+      const sql = `SELECT timestamp, active_power_w FROM readings WHERE timestamp >= '${midnightUTC}' ORDER BY timestamp`;
       const url = `${API_BASE}/${OWNER}/${REPO}/main?q=${encodeURIComponent(sql)}`;
 
       const resp = await fetch(url);
@@ -94,7 +103,7 @@
     }
 
     function renderChart(rows) {
-      const timestamps = rows.map(r => r.timestamp);
+      const timestamps = rows.map(r => utcToCET(r.timestamp));
       const values = rows.map(r => parseFloat(r.active_power_w));
 
       const trace = {
