@@ -24,6 +24,25 @@ class DoltHubClient:
     def _headers(self) -> dict:
         return {"authorization": f"token {self.token}"}
 
+    def execute_read(self, query: str) -> list:
+        """Execute a read query via DoltHub API. Returns list of row dicts."""
+        url = f"{BASE_URL}/{self.owner}/{self.repo}/main"
+        resp = requests.get(
+            url,
+            headers=self._headers(),
+            params={"q": query},
+            timeout=HTTP_TIMEOUT,
+        )
+        resp.raise_for_status()
+        body = resp.json()
+
+        if body.get("query_execution_status") != "Success":
+            raise DoltHubError(
+                f"Read failed: {body.get('query_execution_message')}"
+            )
+
+        return body.get("rows", [])
+
     def execute_write(self, query: str) -> dict:
         """Execute a write query via DoltHub async API.
 

@@ -76,10 +76,14 @@ uv run python collect.py
 crontab -e
 ```
 
-Add this line:
+Add these lines:
 
 ```
+# Collect readings every 5 minutes
 */5 * * * * . /home/thomas/.dolthub_token && cd /home/thomas/energy_inside && /home/thomas/.local/bin/uv run python collect.py >> collect.log 2>&1
+
+# Run battery simulation daily at 00:15 CET (for previous day)
+15 23 * * * . /home/thomas/.dolthub_token && cd /home/thomas/energy_inside && /home/thomas/.local/bin/uv run python simulate_battery.py >> simulate.log 2>&1
 ```
 
 ## Configuration
