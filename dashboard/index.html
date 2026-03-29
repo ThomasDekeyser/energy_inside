@@ -207,6 +207,7 @@
     const today = todayCET();
     const fp = flatpickr("#date-picker", {
       dateFormat: "d/m/Y",
+      locale: { firstDayOfWeek: 1 },
       defaultDate: new Date(today + "T12:00:00"),
       onChange: function(selectedDates) {
         if (selectedDates.length > 0) {
