@@ -1,6 +1,6 @@
-# Energy Inside — P1 Meter Data Collector
+# Energy Inside — P1 Meter Data Collector & Battery Simulator
 
-Polls a HomeWizard P1 meter every 5 minutes and stores energy readings in DoltHub.
+Polls a HomeWizard P1 meter every 5 minutes and stores energy readings in DoltHub. Includes a daily battery simulation that estimates savings for different battery sizes.
 
 ## Prerequisites
 
@@ -40,6 +40,18 @@ CREATE TABLE IF NOT EXISTS readings (
     total_gas_m3 DECIMAL(10,3),
     gas_timestamp DATETIME
 );
+
+CREATE TABLE IF NOT EXISTS battery_simulations (
+    date DATE,
+    battery_size_kwh DECIMAL(5,1),
+    import_saved_kwh DECIMAL(10,3),
+    export_avoided_kwh DECIMAL(10,3),
+    total_import_kwh DECIMAL(10,3),
+    total_export_kwh DECIMAL(10,3),
+    grid_import_kwh DECIMAL(10,3),
+    grid_export_kwh DECIMAL(10,3),
+    PRIMARY KEY (date, battery_size_kwh)
+    );
 ```
 
 2. Install uv:
@@ -82,8 +94,19 @@ Add these lines:
 # Collect readings every 5 minutes
 */5 * * * * . /home/thomas/.dolthub_token && cd /home/thomas/energy_inside && /home/thomas/.local/bin/uv run python collect.py >> collect.log 2>&1
 
-# Run battery simulation daily at 00:15 CET (for previous day)
+# Run battery simulation daily at 00:15 CET
 15 23 * * * . /home/thomas/.dolthub_token && cd /home/thomas/energy_inside && /home/thomas/.local/bin/uv run python simulate_battery.py >> simulate.log 2>&1
+```
+
+## Battery Simulation
+
+`simulate_battery.py` runs a server-side recursive CTE on DoltHub that simulates a home battery across all collected readings. It computes cumulative import saved and export avoided for each battery size (2.7, 5, 5.4, 8.1, 10, 15 kWh), using 90% charge and 89% discharge efficiency. Results are written to the `battery_simulations` table, stamped with the date the simulation was run.
+
+Run manually:
+
+```bash
+. ~/.dolthub_token
+uv run python simulate_battery.py
 ```
 
 ## Configuration
@@ -99,8 +122,7 @@ All configuration is via environment variables:
 
 ## Logs
 
-Logs are appended to `collect.log`. Check for errors:
-
 ```bash
 tail -f ~/energy_inside/collect.log
+tail -f ~/energy_inside/simulate.log
 ```
