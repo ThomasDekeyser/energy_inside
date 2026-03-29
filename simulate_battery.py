@@ -3,7 +3,7 @@
 import logging
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from energy_inside.dolthub import DoltHubClient, DoltHubError
 
@@ -22,8 +22,8 @@ CHARGE_EFF = 0.9
 DISCHARGE_EFF = 0.89
 
 
-def build_simulation_sql(start_utc, end_utc, capacity):
-    """Build a recursive CTE that simulates a battery and returns summary."""
+def build_simulation_sql(capacity):
+    """Build a recursive CTE that simulates a battery over all data and returns summary."""
     return f"""
 WITH RECURSIVE
 numbered AS (
@@ -35,7 +35,6 @@ numbered AS (
     total_power_export_kwh - LAG(total_power_export_kwh) OVER (ORDER BY timestamp) AS export_kwh,
     ROW_NUMBER() OVER (ORDER BY timestamp) AS rn
   FROM readings
-  WHERE timestamp >= '{start_utc}' AND timestamp <= '{end_utc}'
 ),
 sim AS (
   SELECT
@@ -94,21 +93,14 @@ def main():
         token=DOLTHUB_TOKEN, owner=DOLTHUB_OWNER, repo=DOLTHUB_REPO
     )
 
-    # Simulate yesterday (CET)
-    now_utc = datetime.now(timezone.utc)
-    yesterday_cet = (now_utc + timedelta(hours=1) - timedelta(days=1)).strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    # UTC range for yesterday CET
-    start = datetime.strptime(yesterday_cet + " 00:00:00", "%Y-%m-%d %H:%M:%S")
-    start_utc = (start - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
-    end_utc = (start + timedelta(hours=23, minutes=59, seconds=59) - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
-
-    logger.info("Running battery simulations for %s (CET)", yesterday_cet)
+    logger.info("Running battery simulations over all data (date: %s)", today)
 
     values = []
     for size in BATTERY_SIZES:
         logger.info("  Simulating %.1f kWh battery (server-side)...", size)
-        sql = build_simulation_sql(start_utc, end_utc, size)
+        sql = build_simulation_sql(size)
         rows = client.execute_read(sql)
 
         if not rows or rows[0].get("total_import_kwh") is None:
@@ -122,7 +114,7 @@ def main():
         )
 
         values.append(
-            f"('{yesterday_cet}', {size}, {r['import_saved_kwh']}, "
+            f"('{today}', {size}, {r['import_saved_kwh']}, "
             f"{r['export_avoided_kwh']}, {r['total_import_kwh']}, "
             f"{r['total_export_kwh']}, {r['grid_import_kwh']}, "
             f"{r['grid_export_kwh']})"
