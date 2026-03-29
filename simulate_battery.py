@@ -1,4 +1,4 @@
-"""Daily battery simulation: compute savings for different battery sizes."""
+"""Daily battery simulation: run server-side SQL for different battery sizes."""
 
 import logging
 import os
@@ -18,50 +18,71 @@ DOLTHUB_OWNER = os.environ.get("DOLTHUB_OWNER", "thomasdekeyser")
 DOLTHUB_REPO = os.environ.get("DOLTHUB_REPO", "energy_inside")
 
 BATTERY_SIZES = [2.7, 5.0, 5.4, 8.1, 10.0, 15.0]
-CHARGE_EFFICIENCY = 0.9
-DISCHARGE_EFFICIENCY = 0.89
+CHARGE_EFF = 0.9
+DISCHARGE_EFF = 0.89
 
 
-def simulate_battery(rows, capacity):
-    """Simulate a battery over a day's readings.
+def build_simulation_sql(start_utc, end_utc, capacity):
+    """Build a recursive CTE that simulates a battery and returns summary."""
+    return f"""
+WITH RECURSIVE
+numbered AS (
+  SELECT
+    timestamp,
+    total_power_import_kwh,
+    total_power_export_kwh,
+    total_power_import_kwh - LAG(total_power_import_kwh) OVER (ORDER BY timestamp) AS import_kwh,
+    total_power_export_kwh - LAG(total_power_export_kwh) OVER (ORDER BY timestamp) AS export_kwh,
+    ROW_NUMBER() OVER (ORDER BY timestamp) AS rn
+  FROM readings
+  WHERE timestamp >= '{start_utc}' AND timestamp <= '{end_utc}'
+),
+sim AS (
+  SELECT
+    n.rn,
+    0.0 AS import_kwh,
+    0.0 AS export_kwh,
+    0.0 AS battery_kwh,
+    0.0 AS grid_import_kwh,
+    0.0 AS grid_export_kwh
+  FROM numbered n
+  WHERE n.rn = 1
 
-    Returns dict with total_import, total_export, grid_import, grid_export,
-    import_saved, export_avoided.
-    """
-    battery = 0.0
-    total_import = 0.0
-    total_export = 0.0
-    grid_import = 0.0
-    grid_export = 0.0
+  UNION ALL
 
-    for i in range(1, len(rows)):
-        imp = float(rows[i]["total_power_import_kwh"]) - float(rows[i - 1]["total_power_import_kwh"])
-        exp = float(rows[i]["total_power_export_kwh"]) - float(rows[i - 1]["total_power_export_kwh"])
-
-        total_import += imp
-        total_export += exp
-
-        if exp > 0:
-            # Excess solar: charge battery
-            can_store = (capacity - battery) / CHARGE_EFFICIENCY
-            charged = min(exp, can_store)
-            battery += charged * CHARGE_EFFICIENCY
-            grid_export += exp - charged
-        elif imp > 0:
-            # Consuming: discharge battery
-            can_deliver = battery * DISCHARGE_EFFICIENCY
-            discharged = min(imp, can_deliver)
-            battery -= discharged / DISCHARGE_EFFICIENCY
-            grid_import += imp - discharged
-
-    return {
-        "total_import": round(total_import, 3),
-        "total_export": round(total_export, 3),
-        "grid_import": round(grid_import, 3),
-        "grid_export": round(grid_export, 3),
-        "import_saved": round(total_import - grid_import, 3),
-        "export_avoided": round(total_export - grid_export, 3),
-    }
+  SELECT
+    n.rn,
+    n.import_kwh,
+    n.export_kwh,
+    CASE
+      WHEN n.export_kwh > 0 THEN
+        LEAST(s.battery_kwh + n.export_kwh * {CHARGE_EFF}, {capacity})
+      WHEN n.import_kwh > 0 THEN
+        GREATEST(s.battery_kwh - n.import_kwh / {DISCHARGE_EFF}, 0.0)
+      ELSE s.battery_kwh
+    END,
+    CASE
+      WHEN n.import_kwh > 0 THEN
+        GREATEST(n.import_kwh - s.battery_kwh * {DISCHARGE_EFF}, 0.0)
+      ELSE 0.0
+    END,
+    CASE
+      WHEN n.export_kwh > 0 THEN
+        GREATEST(n.export_kwh - ({capacity} - s.battery_kwh) / {CHARGE_EFF}, 0.0)
+      ELSE 0.0
+    END
+  FROM sim s
+  JOIN numbered n ON n.rn = s.rn + 1
+)
+SELECT
+  ROUND(SUM(import_kwh), 3) AS total_import_kwh,
+  ROUND(SUM(export_kwh), 3) AS total_export_kwh,
+  ROUND(SUM(grid_import_kwh), 3) AS grid_import_kwh,
+  ROUND(SUM(grid_export_kwh), 3) AS grid_export_kwh,
+  ROUND(SUM(import_kwh) - SUM(grid_import_kwh), 3) AS import_saved_kwh,
+  ROUND(SUM(export_kwh) - SUM(grid_export_kwh), 3) AS export_avoided_kwh
+FROM sim
+"""
 
 
 def main():
@@ -75,7 +96,6 @@ def main():
 
     # Simulate yesterday (CET)
     now_utc = datetime.now(timezone.utc)
-    # Yesterday in CET: subtract 1 day, get the date part
     yesterday_cet = (now_utc + timedelta(hours=1) - timedelta(days=1)).strftime("%Y-%m-%d")
 
     # UTC range for yesterday CET
@@ -83,41 +103,43 @@ def main():
     start_utc = (start - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
     end_utc = (start + timedelta(hours=23, minutes=59, seconds=59) - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
 
-    logger.info("Fetching readings for %s (CET)", yesterday_cet)
-    rows = client.execute_read(
-        f"SELECT timestamp, total_power_import_kwh, total_power_export_kwh "
-        f"FROM readings WHERE timestamp >= '{start_utc}' AND timestamp <= '{end_utc}' "
-        f"ORDER BY timestamp"
-    )
-
-    if len(rows) < 2:
-        logger.warning("Not enough readings for %s, skipping", yesterday_cet)
-        sys.exit(0)
-
-    logger.info("Got %d readings, simulating %d battery sizes", len(rows), len(BATTERY_SIZES))
+    logger.info("Running battery simulations for %s (CET)", yesterday_cet)
 
     values = []
     for size in BATTERY_SIZES:
-        result = simulate_battery(rows, size)
-        values.append(
-            f"('{yesterday_cet}', {size}, {result['import_saved']}, "
-            f"{result['export_avoided']}, {result['total_import']}, "
-            f"{result['total_export']}, {result['grid_import']}, "
-            f"{result['grid_export']})"
-        )
+        logger.info("  Simulating %.1f kWh battery (server-side)...", size)
+        sql = build_simulation_sql(start_utc, end_utc, size)
+        rows = client.execute_read(sql)
+
+        if not rows or rows[0].get("total_import_kwh") is None:
+            logger.warning("  No results for %.1f kWh, skipping", size)
+            continue
+
+        r = rows[0]
         logger.info(
-            "  %.1f kWh: import saved %.3f kWh, export avoided %.3f kWh",
-            size, result["import_saved"], result["export_avoided"],
+            "  %.1f kWh: import saved %s kWh, export avoided %s kWh",
+            size, r["import_saved_kwh"], r["export_avoided_kwh"],
         )
 
-    sql = (
+        values.append(
+            f"('{yesterday_cet}', {size}, {r['import_saved_kwh']}, "
+            f"{r['export_avoided_kwh']}, {r['total_import_kwh']}, "
+            f"{r['total_export_kwh']}, {r['grid_import_kwh']}, "
+            f"{r['grid_export_kwh']})"
+        )
+
+    if not values:
+        logger.warning("No simulation results to write")
+        sys.exit(0)
+
+    insert_sql = (
         "REPLACE INTO battery_simulations "
         "(date, battery_size_kwh, import_saved_kwh, export_avoided_kwh, "
         "total_import_kwh, total_export_kwh, grid_import_kwh, grid_export_kwh) "
         "VALUES " + ", ".join(values)
     )
 
-    client.execute_write(sql)
+    client.execute_write(insert_sql)
     logger.info("Results written to battery_simulations")
 
 
