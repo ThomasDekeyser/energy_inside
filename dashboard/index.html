@@ -10,7 +10,8 @@
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fafafa; color: #333; padding: 24px; max-width: 960px; margin: 0 auto; }
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
     .header h1 { font-size: 20px; color: #333; }
-    .header .date { font-size: 13px; color: #999; }
+    .header .date { font-size: 13px; color: #999; display: flex; align-items: center; gap: 8px; }
+    .header .date input[type="date"] { font-family: inherit; font-size: 13px; color: #555; border: 1px solid #ddd; border-radius: 4px; padding: 2px 6px; cursor: pointer; }
     .header .current { text-align: right; }
     .header .current .label { font-size: 11px; color: #888; }
     .header .current .value { font-size: 26px; font-weight: bold; color: #2196f3; }
@@ -35,7 +36,7 @@
   <div class="header">
     <div>
       <h1>Energy Inside</h1>
-      <div class="date" id="date"></div>
+      <div class="date">Active Power &mdash; <input type="date" id="date-picker"></div>
     </div>
     <div class="current">
       <div class="label">Current</div>
@@ -53,11 +54,11 @@
       <div class="value" id="min-value">—</div>
     </div>
     <div class="stat import">
-      <div class="label">Import Today</div>
+      <div class="label">Import</div>
       <div class="value" id="import-value">—</div>
     </div>
     <div class="stat export">
-      <div class="label">Export Today</div>
+      <div class="label">Export</div>
       <div class="value" id="export-value">—</div>
     </div>
   </div>
@@ -75,12 +76,15 @@
       });
     }
 
-    function todayMidnightUTC() {
-      // Get current date in CET/CEST, then convert its midnight back to UTC
-      const now = new Date();
-      const cetDate = now.toLocaleDateString("sv-SE", { timeZone: "Europe/Brussels" });
-      // cetDate is "YYYY-MM-DD" — midnight CET in UTC
-      return new Date(cetDate + "T00:00:00+01:00").toISOString().slice(0, 19).replace("T", " ");
+    function todayCET() {
+      return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Brussels" });
+    }
+
+    function cetDateToUTCRange(cetDate) {
+      // Convert a CET date string (YYYY-MM-DD) to UTC start/end timestamps
+      const start = new Date(cetDate + "T00:00:00+01:00").toISOString().slice(0, 19).replace("T", " ");
+      const end = new Date(cetDate + "T23:59:59+01:00").toISOString().slice(0, 19).replace("T", " ");
+      return { start, end };
     }
 
     function utcToCET(utcString) {
@@ -89,9 +93,9 @@
       return dt.toLocaleString("sv-SE", { timeZone: "Europe/Brussels" });
     }
 
-    async function fetchReadings() {
-      const midnightUTC = todayMidnightUTC();
-      const sql = `SELECT timestamp, active_power_w, total_power_import_kwh, total_power_export_kwh FROM readings WHERE timestamp >= '${midnightUTC}' ORDER BY timestamp`;
+    async function fetchReadings(cetDate) {
+      const { start, end } = cetDateToUTCRange(cetDate);
+      const sql = `SELECT timestamp, active_power_w, total_power_import_kwh, total_power_export_kwh FROM readings WHERE timestamp >= '${start}' AND timestamp <= '${end}' ORDER BY timestamp`;
       const url = `${API_BASE}/${OWNER}/${REPO}/main?q=${encodeURIComponent(sql)}`;
 
       const resp = await fetch(url);
@@ -174,14 +178,19 @@
       el.innerHTML = `<div class="message ${isError ? "error" : ""}">${text}</div>`;
     }
 
-    async function init() {
-      document.getElementById("date").textContent = `Active Power \u2014 ${formatDate(new Date())}`;
+    async function loadDay(cetDate) {
+      // Reset stats
+      document.getElementById("current-value").textContent = "— W";
+      document.getElementById("peak-value").textContent = "—";
+      document.getElementById("min-value").textContent = "—";
+      document.getElementById("import-value").textContent = "—";
+      document.getElementById("export-value").textContent = "—";
 
       try {
-        const rows = await fetchReadings();
+        const rows = await fetchReadings(cetDate);
 
         if (rows.length === 0) {
-          showMessage("No readings available for today");
+          showMessage("No readings available for this day");
           return;
         }
 
@@ -193,7 +202,10 @@
       }
     }
 
-    init();
+    const picker = document.getElementById("date-picker");
+    picker.value = todayCET();
+    picker.addEventListener("change", () => loadDay(picker.value));
+    loadDay(picker.value);
   </script>
 </body>
 </html>
