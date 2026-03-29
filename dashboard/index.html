@@ -40,7 +40,7 @@
       <h1>Energy Inside</h1>
       <div class="date">Active Power &mdash; <input type="text" id="date-picker" readonly></div>
     </div>
-    <div class="current">
+    <div class="current" id="current-block">
       <div class="label">Current</div>
       <div class="value" id="current-value">— W</div>
     </div>
@@ -181,6 +181,9 @@
     }
 
     async function loadDay(cetDate) {
+      const isToday = cetDate === todayCET();
+      document.getElementById("current-block").style.display = isToday ? "" : "none";
+
       // Reset stats
       document.getElementById("current-value").textContent = "— W";
       document.getElementById("peak-value").textContent = "—";
